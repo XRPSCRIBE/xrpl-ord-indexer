@@ -46,7 +46,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/reallyshadydev/xrpl-ord-indexer.git"
+    "url": "git+https://github.com/XRPSCRIBE/xrpl-ord-indexer.git"
   },
-  "homepage": "https://github.com/reallyshadydev/xrpl-ord-indexer#readme"
+  "homepage": "https://github.com/XRPSCRIBE/xrpl-ord-indexer#readme"
 }

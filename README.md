@@ -9,7 +9,7 @@ This is the indexer that powers [XRPSCRIBE](https://xrpscribe.com). Anyone can r
 ## Install
 
 ```sh
-git clone https://github.com/reallyshadydev/xrpl-ord-indexer.git
+git clone https://github.com/XRPSCRIBE/xrpl-ord-indexer.git
 cd xrpl-ord-indexer
 npm install
 npm run build
