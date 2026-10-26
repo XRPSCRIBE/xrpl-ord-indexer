@@ -1,7 +1,7 @@
 {
   "name": "xrpl-ord-indexer",
   "version": "0.1.0",
-  "description": "Indexer for XRPL inscriptions (the `ord` protocol): finds every inscription on the XRP Ledger, in order, and rebuilds its content from transaction memos.",
+  "description": "Indexer for XRPL inscriptions (the `ord` protocol) and XRC-20 tokens: finds every inscription on the XRP Ledger, in order, rebuilds its content from transaction memos, and keeps token balances.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -11,6 +11,7 @@
   "files": [
     "dist",
     "SPEC.md",
+    "XRC20.md",
     "LICENSE"
   ],
   "scripts": {
@@ -25,7 +26,10 @@
     "ordinals",
     "inscriptions",
     "ord",
-    "indexer"
+    "indexer",
+    "xrc-20",
+    "brc-20",
+    "tokens"
   ],
   "engines": {
     "node": ">=20"

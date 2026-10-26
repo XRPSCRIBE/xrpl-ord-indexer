@@ -1,8 +1,10 @@
 # xrpl-ord-indexer
 
-An indexer for **XRPL inscriptions**: files stored entirely on the XRP Ledger, in transaction memos, under the `ord` protocol (see [SPEC.md](SPEC.md)). It reads validated ledgers in order, finds every valid inscription, rebuilds its content from its chain of chunk transactions, checks it against its declared length and SHA-256, and numbers it.
+An indexer for **XRPL inscriptions** and **XRC-20 tokens**. Inscriptions are files stored entirely on the XRP Ledger, in transaction memos, under the `ord` protocol (see [SPEC.md](SPEC.md)). It reads validated ledgers in order, finds every valid inscription, rebuilds its content from its chain of chunk transactions, checks it against its declared length and SHA-256, and numbers it.
 
-This is the indexer that powers [XRPSCRIBE](https://xrpscribe.com). Anyone can run it and get the same inscription numbers.
+Alongside, it indexes **XRC-20** tokens, which work like BRC-20: deploy, mint and transfer are small JSON inscriptions, and balances follow from reading them in order (see [XRC20.md](XRC20.md)).
+
+This is the indexer that powers [XRPSCRIBE](https://xrpscribe.com). Anyone can run it and get the same inscription numbers and token balances.
 
 ## Install
 
@@ -38,6 +40,18 @@ node dist/cli.js --network mainnet --resume --out mainnet.jsonl
 | `--out FILE` | Output file. Default `inscriptions.jsonl`. |
 
 Old ledgers and chunk transactions need a **full-history** server (for example `wss://xrplcluster.com` on mainnet). Dropped connections and busy servers are retried; after an error the indexer waits and resumes from its cursor.
+
+## Tokens
+
+The same run writes every XRC-20 token operation to `<out>.xrc20.jsonl`. Read the balances from it at any time:
+
+```sh
+node dist/cli.js tokens                              # every token: supply, minted, holders
+node dist/cli.js tokens --tick xogi                  # one token, with its holders and recent activity
+node dist/cli.js tokens --address rQHvQX…CbyZpT      # one account's balances
+```
+
+Add `--out FILE` to use the same file name you indexed into.
 
 ## Output
 
@@ -82,6 +96,23 @@ await client.disconnect()
 ```
 
 `runIndexer` also accepts `onInscription` (the full inscription, body included), `onTransactions` (every transaction of each ledger) and `onLedger` (after each finished ledger, for checkpointing).
+
+Tokens follow the same run. Hand a `TokenFollower` the indexer's callbacks, and read balances from its log:
+
+```ts
+import { TokenFollower, Xrc20Log } from 'xrpl-ord-indexer'
+
+const log = new Xrc20Log('tokens.jsonl')
+const tokens = new TokenFollower(log)
+await runIndexer({
+  source: client,
+  from: 21764320,
+  onInscription: (i) => tokens.onInscription(i),
+  onRecord: (r) => tokens.onRecord(r),
+  onTransactions: (ledger, txs) => tokens.onTransactions(ledger, txs),
+})
+console.log(log.ledger.list(), log.ledger.balances('rQHvQXLxha1B8sV8diec1DudLQ2CbyZpT'))
+```
 
 ## Tests
 
