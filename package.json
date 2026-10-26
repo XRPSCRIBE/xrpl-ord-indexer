@@ -10,7 +10,8 @@
   },
   "files": [
     "dist",
-    "SPEC.md"
+    "SPEC.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -18,7 +19,14 @@
     "test": "node --import tsx --test test/*.test.ts",
     "index": "tsx src/cli.ts"
   },
-  "keywords": ["xrpl", "xrp", "ordinals", "inscriptions", "ord", "indexer"],
+  "keywords": [
+    "xrpl",
+    "xrp",
+    "ordinals",
+    "inscriptions",
+    "ord",
+    "indexer"
+  ],
   "engines": {
     "node": ">=20"
   },
@@ -30,5 +38,11 @@
     "@types/node": "^26.6.5",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
-  }
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/reallyshadydev/xrpl-ord-indexer.git"
+  },
+  "homepage": "https://github.com/reallyshadydev/xrpl-ord-indexer#readme"
 }

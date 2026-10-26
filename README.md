@@ -88,3 +88,7 @@ await client.disconnect()
 ```sh
 npm test
 ```
+
+## License
+
+MIT. See [LICENSE](LICENSE).
