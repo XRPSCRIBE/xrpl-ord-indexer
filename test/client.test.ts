@@ -38,6 +38,25 @@ test('rate-limited and disconnected endpoints fail over to the next one', async 
   assert.deepEqual(calls, [0, 1, 2])
 })
 
+test('a server that names its rate-limit window is left alone until then', async () => {
+  const quota = Object.assign(new Error('rate limit'), {
+    data: { error: 'slowDown', error_message: 'rate limit: units quota (500000 per 3600s) exhausted, retry in ~1939604ms' },
+  })
+  const { client, calls } = fake([
+    () => {
+      throw quota
+    },
+    () => ({ drops: { base_fee: '10', open_ledger_fee: '10' } }),
+  ])
+  await client.fee()
+  // Even when a request starts on it again, it is skipped while it rests.
+  for (let i = 0; i < 2; i++) {
+    ;(client as any).current = 0
+    await client.fee()
+  }
+  assert.deepEqual(calls, [0, 1, 1, 1])
+})
+
 test('non-retryable errors are raised immediately', async () => {
   const { client, calls } = fake([
     () => {

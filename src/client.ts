@@ -55,6 +55,17 @@ export class LedgerNotFoundError extends Error {
 /** rippled errors that mean "try again later or elsewhere", which public servers return under load. */
 const RETRYABLE = new Set(['slowDown', 'tooBusy', 'noCurrent', 'noClosed', 'noNetwork', 'amendmentBlocked', 'failedToForward'])
 
+/** The longest a rate-limited server is left alone, whatever it asks for. */
+const MAX_REST_MS = 60 * 60 * 1000
+/** The longest one request waits when every server is resting. */
+const MAX_WAIT_MS = 60 * 1000
+
+/** How long a rate-limited server asked to be left alone ("… retry in ~1939604ms"), if it said. */
+export function restFor(err: unknown): number | undefined {
+  const match = /retry in ~?(\d+)\s*ms/.exec(String((err as any)?.data?.error_message ?? ''))
+  return match ? Math.min(Number(match[1]), MAX_REST_MS) : undefined
+}
+
 export interface ClientOptions {
   /** Attempts per request across all endpoints (default 6). */
   retries?: number
@@ -105,6 +116,8 @@ export class XrplLedgerClient implements LedgerClient {
   private current = 0
   private readonly retries: number
   private readonly backoffMs: number
+  /** Per endpoint: until when it asked not to be sent requests (ms since epoch). */
+  private readonly restingUntil: number[]
 
   constructor(network: string | string[] | Client, options: ClientOptions = {}) {
     if (network instanceof Client) {
@@ -117,6 +130,7 @@ export class XrplLedgerClient implements LedgerClient {
     }
     this.retries = options.retries ?? 6
     this.backoffMs = options.backoffMs ?? 500
+    this.restingUntil = this.endpoints.map(() => 0)
   }
 
   /** The endpoint requests currently go to. */
@@ -153,9 +167,29 @@ export class XrplLedgerClient implements LedgerClient {
     this.current = (this.current + 1) % this.clients.length
   }
 
+  /**
+   * Move off an endpoint that is resting, to the next one that is not. When all
+   * are resting, wait (up to a minute) for the first to be ready instead.
+   */
+  private async avoidResting(): Promise<void> {
+    const now = Date.now()
+    if (this.restingUntil[this.current] <= now) return
+    for (let step = 1; step < this.clients.length; step++) {
+      const index = (this.current + step) % this.clients.length
+      if (this.restingUntil[index] <= now) {
+        this.current = index
+        return
+      }
+    }
+    const soonest = this.restingUntil.indexOf(Math.min(...this.restingUntil))
+    this.current = soonest
+    await new Promise((resolve) => setTimeout(resolve, Math.min(this.restingUntil[soonest] - now, MAX_WAIT_MS)))
+  }
+
   async request(request: Record<string, unknown>): Promise<any> {
     let lastError: unknown
     for (let attempt = 0; attempt < this.retries; attempt++) {
+      await this.avoidResting()
       try {
         const client = await this.ensureConnected(this.current)
         const response = await client.request(request as any)
@@ -165,9 +199,12 @@ export class XrplLedgerClient implements LedgerClient {
         const code = (err as any)?.data?.error
         const connectionProblem = err instanceof ConnectionError || (err as any)?.code === 'ECONNREFUSED'
         if (!connectionProblem && !RETRYABLE.has(code)) throw err
+        // A server that says how long its rate limit lasts is skipped until then.
+        const rest = restFor(err)
+        if (rest !== undefined) this.restingUntil[this.current] = Date.now() + rest
         this.rotate()
-        // Back off once every endpoint has been tried in this cycle.
-        if ((attempt + 1) % this.clients.length === 0 || code === 'slowDown') {
+        // Back off once every endpoint has been tried in this cycle (resting ones wait in avoidResting).
+        if ((attempt + 1) % this.clients.length === 0 || (code === 'slowDown' && rest === undefined)) {
           await new Promise((resolve) => setTimeout(resolve, this.backoffMs * 2 ** Math.floor(attempt / this.clients.length)))
         }
       }
