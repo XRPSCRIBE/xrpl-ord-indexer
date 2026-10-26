@@ -45,6 +45,13 @@ export function resolveNetwork(network: string): string[] {
   return NETWORKS[network] ?? network.split(',').map((url) => url.trim()).filter(Boolean)
 }
 
+/** No server we use has this ledger: public servers keep limited history. */
+export class LedgerNotFoundError extends Error {
+  constructor(readonly ledgerIndex: number) {
+    super(`no server has ledger ${ledgerIndex}: public servers keep limited history. Use a full-history server, e.g. --network wss://xrplcluster.com (mainnet) or wss://s.altnet.rippletest.net:51233 (testnet)`)
+  }
+}
+
 /** rippled errors that mean "try again later or elsewhere", which public servers return under load. */
 const RETRYABLE = new Set(['slowDown', 'tooBusy', 'noCurrent', 'noClosed', 'noNetwork', 'amendmentBlocked', 'failedToForward'])
 
@@ -204,7 +211,18 @@ export class XrplLedgerClient implements LedgerClient {
 
   /** Validated transactions of one ledger, in execution order. */
   async ledgerTransactions(ledgerIndex: number): Promise<LedgerTx[]> {
-    const result = await this.request({ command: 'ledger', ledger_index: ledgerIndex, transactions: true, expand: true })
+    // Like transactions, old ledgers are only on some servers: ask each before giving up.
+    let result: any
+    for (let tried = 0; ; tried++) {
+      try {
+        result = await this.request({ command: 'ledger', ledger_index: ledgerIndex, transactions: true, expand: true })
+        break
+      } catch (err) {
+        if ((err as any)?.data?.error !== 'lgrNotFound') throw err
+        if (tried + 1 >= this.clients.length) throw new LedgerNotFoundError(ledgerIndex)
+        this.rotate()
+      }
+    }
     const ledger = result.ledger
     const txs: LedgerTx[] = (ledger.transactions ?? []).map((raw: any) => normalizeTx(raw, Number(ledger.ledger_index)))
     for (const t of txs) {

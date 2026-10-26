@@ -4,7 +4,7 @@
 // Resumable: the last finished ledger is kept in a cursor file next to the output.
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { parseArgs } from 'node:util'
-import { XrplLedgerClient } from './client.js'
+import { LedgerNotFoundError, XrplLedgerClient } from './client.js'
 import { IndexRecord, runIndexer } from './indexer.js'
 import { backfillTokens, TokenFollower } from './tokens.js'
 import { Xrc20Log } from './xrc20-log.js'
@@ -62,8 +62,11 @@ async function main(): Promise<void> {
         await indexToFile(client, current)
         break
       } catch (err) {
+        // Waiting does not bring back a ledger no server keeps.
+        if (err instanceof LedgerNotFoundError) throw err
         console.error(`indexer: ${err instanceof Error ? err.message : String(err)}; resuming in 10 s`)
-        current = { ...opts, from: undefined, resume: true }
+        // From the cursor once a ledger has been finished; until then, from the start again.
+        current = existsSync(`${opts.out}.cursor`) ? { ...opts, from: undefined, resume: true } : opts
         await new Promise((resolve) => setTimeout(resolve, 10_000))
       }
     }

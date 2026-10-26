@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { ConnectionError, DisconnectedError } from 'xrpl'
-import { XrplLedgerClient, proxyAgentFor, resolveNetwork } from '../src/client.js'
+import { LedgerNotFoundError, XrplLedgerClient, proxyAgentFor, resolveNetwork } from '../src/client.js'
 
 /** Replace the client's websocket connections with scripted fakes. */
 function fake(endpoints: Array<(req: any) => any>) {
@@ -70,6 +70,29 @@ test('a transaction missing on one server is looked up on the others', async () 
     },
   ])
   assert.equal(await none.getTx(tx.hash), null)
+})
+
+test('a ledger missing on one server is read from another, and a clear error when none has it', async () => {
+  const ledger = { ledger: { ledger_index: 9, close_time_iso: '2026-10-21T20:00:00Z', transactions: [{ hash: 'CD'.repeat(32), tx_json: { Account: 'rY' }, meta: { TransactionResult: 'tesSUCCESS', TransactionIndex: 0 } }] } }
+  const { client } = fake([
+    () => {
+      throw rippledError('lgrNotFound')
+    },
+    () => ledger,
+  ])
+  const txs = await client.ledgerTransactions(9)
+  assert.equal(txs[0].tx.Account, 'rY')
+  assert.equal(txs[0].ledgerIndex, 9)
+
+  const { client: none } = fake([
+    () => {
+      throw rippledError('lgrNotFound')
+    },
+    () => {
+      throw rippledError('lgrNotFound')
+    },
+  ])
+  await assert.rejects(none.ledgerTransactions(9), (err: unknown) => err instanceof LedgerNotFoundError && /full-history server/.test(err.message))
 })
 
 test('connect falls back to the next endpoint when one times out', async () => {
